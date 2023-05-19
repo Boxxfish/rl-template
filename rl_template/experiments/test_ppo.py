@@ -1,10 +1,10 @@
 """
-Experiment for checking that PPO is working.
+Experiment for checking that PPO works.
 
-Proximal Policy Optimization (PPO) is a popular deep reinforcement learning
-algorithm. At OpenAI and a lot of other places, it's used as a baseline, since
-you can get pretty good performance without having to fiddle with the
-hyperparameters too much.
+Proximal Policy Optimization (PPO) is a popular online deep reinforcement
+learning algorithm. At OpenAI and a lot of other places, it's used as a
+baseline, since you can get pretty good performance without having to fiddle
+with the hyperparameters too much.
 """
 from functools import reduce
 from typing import Any
@@ -25,18 +25,19 @@ from rl_template.utils import init_orthogonal
 _: Any
 
 # Hyperparameters
-num_envs = 128
-train_steps = 500
-iterations = 300
-train_iters = 2
-train_batch_size = 512
-discount = 0.98
-lambda_ = 0.95
-epsilon = 0.2
-max_eval_steps = 500
-v_lr = 0.01
-p_lr = 0.001
-device = torch.device("cpu")
+num_envs = 128  # Number of environments to step through at once during sampling.
+train_steps = 500  # Number of steps to step through during sampling. Total # of samples is train_steps * num_envs/
+iterations = 300  # Number of sample/train iterations.
+train_iters = 2  # Number of passes over the samples collected.
+train_batch_size = 512  # Minibatch size while training models.
+discount = 0.98  # Discount factor applied to rewards.
+lambda_ = 0.95  # Lambda for GAE.
+epsilon = 0.2  # Epsilon for importance sample clipping.
+max_eval_steps = 500  # Number of eval runs to average over.
+eval_steps = 8  # Max number of steps to take during each eval run.
+v_lr = 0.01  # Learning rate of the value net.
+p_lr = 0.001  # Learning rate of the policy net.
+device = torch.device("cpu")  # Device to use during training.
 
 # Uncomment for logging
 """
@@ -112,8 +113,6 @@ obs_space = env.observation_space
 act_space = env.action_space
 v_net = ValueNet(obs_space.shape)
 p_net = PolicyNet(obs_space.shape, act_space.n)
-p_net_old = PolicyNet(obs_space.shape, act_space.n)
-p_net_old.eval()
 v_opt = torch.optim.Adam(v_net.parameters(), lr=v_lr)
 p_opt = torch.optim.Adam(p_net.parameters(), lr=p_lr)
 
@@ -166,33 +165,25 @@ for _ in tqdm(range(iterations), position=0):
     )
     buffer.clear()
 
-    # Evaluate the network's performance after this training iteration. The
-    # reward per episode and entropy are both recorded here. Entropy is useful
-    # because as the agent learns, unless there really *is* a benefit to
-    # learning a policy with randomness (and usually there isn't), the agent
-    # should act more deterministically as time goes on. So, the entropy should
-    # decrease.
-    #
-    # No, you don't need to understand the code here.
-    obs = torch.Tensor(test_env.reset()[0])
-    done = False
+    # Evaluate the network's performance after this training iteration.
+    eval_obs = torch.Tensor(test_env.reset()[0])
+    eval_done = False
     with torch.no_grad():
         # Visualize
         reward_total = 0
         entropy_total = 0.0
-        obs = torch.Tensor(test_env.reset()[0])
-        eval_steps = 8
+        eval_obs = torch.Tensor(test_env.reset()[0])
         for _ in range(eval_steps):
             avg_entropy = 0.0
             steps_taken = 0
             for _ in range(max_eval_steps):
-                distr = Categorical(logits=p_net(obs.unsqueeze(0)).squeeze())
+                distr = Categorical(logits=p_net(eval_obs.unsqueeze(0)).squeeze())
                 action = distr.sample().item()
-                obs_, reward, done, _, _ = test_env.step(action)
-                obs = torch.Tensor(obs_)
+                obs_, reward, eval_done, _, _ = test_env.step(action)
+                eval_obs = torch.Tensor(obs_)
                 steps_taken += 1
-                if done:
-                    obs = torch.Tensor(test_env.reset()[0])
+                if eval_done:
+                    eval_obs = torch.Tensor(test_env.reset()[0])
                     break
                 reward_total += reward
                 avg_entropy += distr.entropy()
@@ -210,6 +201,3 @@ for _ in tqdm(range(iterations), position=0):
         }
     )
     """
-
-    obs = torch.Tensor(env.reset()[0])
-    done = False
