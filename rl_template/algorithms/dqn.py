@@ -7,7 +7,7 @@ from .replay_buffer import ReplayBuffer
 INF = 10e8
 
 
-def train_ppo(
+def train_dqn(
     q_net: nn.Module,
     q_net_target: nn.Module,
     q_opt: torch.optim.Optimizer,
@@ -16,7 +16,7 @@ def train_ppo(
     train_iters: int,
     train_batch_size: int,
     discount: float,
-) -> Tuple[float, float]:
+) -> float:
     """
     Performs the DQN training loop.
     Returns the total Q loss.
@@ -63,3 +63,4 @@ def train_ppo(
         if device.type != "cpu":
             q_net.cpu()
         q_net.eval()
+    return total_q_loss

@@ -22,10 +22,16 @@ def train_ppo(
     lambda_: float,
     epsilon: float,
     gradient_steps: int = 1,
+    use_masks: bool = False,
 ) -> Tuple[float, float]:
     """
-    Performs the PPO training loop.
-    Returns a tuple of total policy loss and total value loss.
+    Performs the PPO training loop. Returns a tuple of total policy loss and
+    total value loss.
+
+    Args:
+        gradient_steps: Number of batches to step through before before
+        adjusting weights.
+        use_masks: If True, masks are passed to the model.
     """
     p_net.train()
     v_net_frozen = copy.deepcopy(v_net)
@@ -44,12 +50,7 @@ def train_ppo(
         batches = buffer.samples(train_batch_size, discount, lambda_, v_net_frozen)
         for (
             i,
-            prev_states,
-            actions,
-            action_probs,
-            returns,
-            advantages,
-            action_masks,
+            (prev_states, actions, action_probs, returns, advantages, action_masks),
         ) in enumerate(batches):
             # Move batch to device if applicable
             prev_states = prev_states.to(device=device)
@@ -64,20 +65,23 @@ def train_ppo(
                 old_act_probs = Categorical(logits=action_probs).log_prob(
                     actions.squeeze()
                 )
-            new_log_probs = p_net(prev_states, action_masks)
+            if use_masks:
+                new_log_probs = p_net(prev_states, action_masks)
+            else:
+                new_log_probs = p_net(prev_states)
             new_act_probs = Categorical(logits=new_log_probs).log_prob(
                 actions.squeeze()
             )
             term1 = (new_act_probs - old_act_probs).exp() * advantages
             term2 = (1.0 + epsilon * advantages.sign()) * advantages
-            p_loss = -term1.min(term2).mean()
+            p_loss = -term1.min(term2).mean() / gradient_steps
             p_loss.backward()
             p_opt.step()
             total_p_loss += p_loss.item()
 
             # Train value network
             diff = v_net(prev_states) - returns
-            v_loss = (diff * diff).mean()
+            v_loss = (diff * diff).mean() / gradient_steps
             v_loss.backward()
             v_opt.step()
             total_v_loss += v_loss.item()
@@ -85,6 +89,8 @@ def train_ppo(
         if (i + 1) % gradient_steps == 0:
             p_opt.step()
             v_opt.step()
+            p_opt.zero_grad()
+            v_opt.zero_grad()
 
     if device.type != "cpu":
         p_net.cpu()

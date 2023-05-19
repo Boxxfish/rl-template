@@ -12,13 +12,15 @@ from typing import Any
 import envpool  # type: ignore
 import torch
 import torch.nn as nn
-import wandb
+
+# import wandb
 from gymnasium.envs.classic_control.cartpole import CartPoleEnv
 from torch.distributions import Categorical
 from tqdm import tqdm
+from rl_template.algorithms.ppo import train_ppo
 
-from ..algorithms.rollout_buffer import RolloutBuffer
-from ..utils import copy_params, init_orthogonal
+from rl_template.algorithms.rollout_buffer import RolloutBuffer
+from rl_template.utils import init_orthogonal
 
 _: Any
 
@@ -36,6 +38,8 @@ v_lr = 0.01
 p_lr = 0.001
 device = torch.device("cpu")
 
+# Uncomment for logging
+"""
 wandb.init(
     project="tests",
     entity="ENTITY",
@@ -53,6 +57,7 @@ wandb.init(
         "p_lr": p_lr,
     },
 )
+"""
 
 
 # The value network takes in an observation and returns a single value, the
@@ -116,11 +121,10 @@ p_opt = torch.optim.Adam(p_net.parameters(), lr=p_lr)
 buffer = RolloutBuffer(
     obs_space.shape,
     torch.Size((1,)),
-    torch.Size((4,)),
+    torch.Size((act_space.n,)),
     torch.int,
     num_envs,
     train_steps,
-    device,
 )
 
 obs = torch.Tensor(env.reset()[0])
@@ -147,74 +151,19 @@ for _ in tqdm(range(iterations), position=0):
         buffer.insert_final_step(obs)
 
     # Train
-    p_net.train()
-    v_net.train()
-    copy_params(p_net, p_net_old)
-
-    total_v_loss = 0.0
-    total_p_loss = 0.0
-    for _ in range(train_iters):
-        # The rollout buffer provides randomized minibatches of samples
-        batches = buffer.samples(train_batch_size, discount, lambda_, v_net)
-        for prev_states, actions, action_probs, returns, advantages, _ in batches:
-            # Train policy network.
-            #
-            # First, we get the log probabilities of taking the actions we took
-            # when we took them. You can store this in the replay buffer right
-            # after taking the action and reuse it, but here I'm just using a
-            # copy of the original policy network and passing the observation to
-            # get the same thing.
-            with torch.no_grad():
-                old_log_probs = p_net_old(prev_states)
-                old_act_probs = Categorical(logits=old_log_probs).log_prob(
-                    actions.squeeze()
-                )
-            # Next, we get the log probabilities of taking the actions with our
-            # current network. During the first iteration, when we sample our
-            # first minibatch, this should give us the exact same probabilities
-            # as the step above, since we didn't update the network yet.
-            p_opt.zero_grad()
-            new_log_probs = p_net(prev_states)
-            new_act_probs = Categorical(logits=new_log_probs).log_prob(
-                actions.squeeze()
-            )
-            # Then, we run PPO's loss function, which is sometimes called the
-            # surrogate loss. Written out explicitly, it's
-            # min(current_probs/prev_probs * advantages,
-            # clamp(current_probs/prev_probs, 1 - epsilon, 1 + epsilon) *
-            # advantages). The actual code written is just a more optimized way
-            # of writing that.
-            #
-            # Basically, we only want to update our network if the probability
-            # of taking the actions with our current net is slightly less or
-            # slightly more than the probability of taking the actions under the
-            # old net. If that ratio is too high or too low, then the clipping
-            # kicks in, and the gradient goes to 0 since we're differentiating a
-            # constant (1 - epsilon or 1 + epsilon).
-            #
-            # Note that the only major difference is the importance sampling
-            # term (the ratio) and the clipping; the loss function for A2C is
-            # current_log_probs * advantages, which is very similar. Also, we're
-            # using a negative loss function because we're trying to maximize
-            # this instead of minimizing it.
-            term1: torch.Tensor = (new_act_probs - old_act_probs).exp() * advantages
-            term2: torch.Tensor = (1.0 + epsilon * advantages.sign()) * advantages
-            p_loss = -term1.min(term2).mean()
-            p_loss.backward()
-            p_opt.step()
-            total_p_loss += p_loss.item()
-
-            # Train value network. Hopefully, this part is much easier to
-            # understand.
-            v_opt.zero_grad()
-            diff: torch.Tensor = v_net(prev_states) - returns.unsqueeze(1)
-            v_loss = (diff * diff).mean()
-            v_loss.backward()
-            v_opt.step()
-            total_v_loss += v_loss.item()
-
-    p_net.eval()
-    v_net.eval()
+    total_p_loss, total_v_loss = train_ppo(
+        p_net,
+        v_net,
+        p_opt,
+        v_opt,
+        buffer,
+        device,
+        train_iters,
+        train_batch_size,
+        discount,
+        lambda_,
+        epsilon,
+    )
     buffer.clear()
 
     # Evaluate the network's performance after this training iteration. The
@@ -250,6 +199,8 @@ for _ in tqdm(range(iterations), position=0):
             avg_entropy /= steps_taken
             entropy_total += avg_entropy
 
+    # Uncomment for logging
+    """
     wandb.log(
         {
             "avg_eval_episode_reward": reward_total / eval_steps,
@@ -258,6 +209,7 @@ for _ in tqdm(range(iterations), position=0):
             "avg_p_loss": total_p_loss / train_iters,
         }
     )
+    """
 
     obs = torch.Tensor(env.reset()[0])
     done = False

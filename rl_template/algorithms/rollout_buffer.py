@@ -22,7 +22,6 @@ class RolloutBuffer:
         action_dtype: torch.dtype,
         num_envs: int,
         num_steps: int,
-        device: torch.device,  # deprecated
     ):
         k = torch.float
         state_shape = torch.Size([num_steps + 1, num_envs] + list(state_shape))
