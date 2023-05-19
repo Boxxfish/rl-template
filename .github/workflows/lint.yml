@@ -1,0 +1,13 @@
+name: lint
+on: [push]
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: snok/install-poetry@v1
+    - run: |
+        poetry install
+        poetry run mypy .
+    - uses: psf/black@stable
+    - uses: isort/isort-action@v1.0.0
