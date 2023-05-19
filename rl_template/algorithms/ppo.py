@@ -76,14 +76,12 @@ def train_ppo(
             term2 = (1.0 + epsilon * advantages.sign()) * advantages
             p_loss = -term1.min(term2).mean() / gradient_steps
             p_loss.backward()
-            p_opt.step()
             total_p_loss += p_loss.item()
 
             # Train value network
             diff = v_net(prev_states) - returns
             v_loss = (diff * diff).mean() / gradient_steps
             v_loss.backward()
-            v_opt.step()
             total_v_loss += v_loss.item()
 
         if (i + 1) % gradient_steps == 0:

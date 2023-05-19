@@ -6,22 +6,20 @@ learning algorithm. It's intuitive to understand, and it gets reliable results,
 though it can take longer to run.
 """
 import copy
-from functools import reduce
 import random
+from functools import reduce
 from typing import Any
 
 import envpool  # type: ignore
 import numpy as np  # type: ignore
 import torch
 import torch.nn as nn
-
-# import wandb
+import wandb
 from gymnasium.envs.classic_control.cartpole import CartPoleEnv
-from gymnasium.spaces import Discrete
-from torch.distributions import Categorical
 from tqdm import tqdm
-from rl_template.algorithms.dqn import train_dqn
 
+import rl_template.conf
+from rl_template.algorithms.dqn import train_dqn
 from rl_template.algorithms.replay_buffer import ReplayBuffer
 from rl_template.utils import init_orthogonal
 
@@ -44,13 +42,11 @@ buffer_size = 10000  # Number of elements that can be stored in the buffer.
 target_update = 500  # Number of iterations before updating Q target.
 device = torch.device("cuda")
 
-# Uncomment for logging
-"""
 wandb.init(
     project="tests",
-    entity="ENTITY",
+    entity=rl_template.conf.entity,
     config={
-        "experiment": "ppo",
+        "experiment": "dqn",
         "num_envs": num_envs,
         "train_steps": train_steps,
         "train_iters": train_iters,
@@ -61,7 +57,6 @@ wandb.init(
         "q_lr": q_lr,
     },
 )
-"""
 
 
 # The Q network takes in an observation and returns the predicted return for
@@ -75,16 +70,16 @@ class QNet(nn.Module):
         nn.Module.__init__(self)
         flat_obs_dim = reduce(lambda e1, e2: e1 * e2, obs_shape, 1)
         self.net = nn.Sequential(
-            nn.Linear(flat_obs_dim, 256),
+            nn.Linear(flat_obs_dim, 64),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(64, 64),
             nn.ReLU(),
         )
         self.relu = nn.ReLU()
         self.advantage = nn.Sequential(
-            nn.Linear(256, 256), nn.ReLU(), nn.Linear(256, action_count)
+            nn.Linear(64, 64), nn.ReLU(), nn.Linear(64, action_count)
         )
-        self.value = nn.Sequential(nn.Linear(256, 256), nn.ReLU(), nn.Linear(256, 1))
+        self.value = nn.Sequential(nn.Linear(64, 64), nn.ReLU(), nn.Linear(64, 1))
         self.action_count = action_count
         init_orthogonal(self)
 
@@ -147,7 +142,7 @@ for step in tqdm(range(iterations), position=0):
 
     # Train
     if buffer.filled:
-        total_q_net = train_dqn(
+        total_q_loss = train_dqn(
             q_net,
             q_net_target,
             q_opt,
@@ -183,8 +178,6 @@ for step in tqdm(range(iterations), position=0):
                         eval_obs = torch.from_numpy(np.array(obs_)).float()
                         break
 
-        # Uncomment for logging
-        """
         wandb.log(
             {
                 "avg_eval_episode_reward": reward_total / eval_steps,
@@ -193,7 +186,6 @@ for step in tqdm(range(iterations), position=0):
                 "q_lr": q_opt.param_groups[-1]["lr"],
             }
         )
-        """
 
         # Update Q target
         if (step + 1) % target_update == 0:

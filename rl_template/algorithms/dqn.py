@@ -1,4 +1,5 @@
 from typing import Tuple
+
 import torch
 from torch import nn
 
@@ -44,15 +45,11 @@ def train_dqn(
         q_opt.zero_grad()
         with torch.no_grad():
             next_actions = (
-                torch.where(next_masks == 1, -INF, q_net(states))
-                .argmax(1)
-                .squeeze(0)
+                torch.where(next_masks == 1, -INF, q_net(states)).argmax(1).squeeze(0)
             )
             q_target = rewards.unsqueeze(1) + discount * q_net_target(
                 states
-            ).detach().gather(1, next_actions.unsqueeze(1)) * (
-                1.0 - dones.unsqueeze(1)
-            )
+            ).detach().gather(1, next_actions.unsqueeze(1)) * (1.0 - dones.unsqueeze(1))
         diff = q_net(prev_states).gather(1, actions.unsqueeze(1)) - q_target
         q_loss = (diff * diff).mean()
         q_loss.backward()

@@ -12,22 +12,22 @@ from typing import Any
 import envpool  # type: ignore
 import torch
 import torch.nn as nn
-
-# import wandb
+import wandb
 from gymnasium.envs.classic_control.cartpole import CartPoleEnv
 from torch.distributions import Categorical
 from tqdm import tqdm
-from rl_template.algorithms.ppo import train_ppo
 
+from rl_template.algorithms.ppo import train_ppo
 from rl_template.algorithms.rollout_buffer import RolloutBuffer
+from rl_template.conf import entity
 from rl_template.utils import init_orthogonal
 
 _: Any
 
 # Hyperparameters
-num_envs = 128  # Number of environments to step through at once during sampling.
-train_steps = 500  # Number of steps to step through during sampling. Total # of samples is train_steps * num_envs/
-iterations = 300  # Number of sample/train iterations.
+num_envs = 256  # Number of environments to step through at once during sampling.
+train_steps = 128  # Number of steps to step through during sampling. Total # of samples is train_steps * num_envs/
+iterations = 1000  # Number of sample/train iterations.
 train_iters = 2  # Number of passes over the samples collected.
 train_batch_size = 512  # Minibatch size while training models.
 discount = 0.98  # Discount factor applied to rewards.
@@ -37,13 +37,13 @@ max_eval_steps = 500  # Number of eval runs to average over.
 eval_steps = 8  # Max number of steps to take during each eval run.
 v_lr = 0.01  # Learning rate of the value net.
 p_lr = 0.001  # Learning rate of the policy net.
-device = torch.device("cpu")  # Device to use during training.
+device = torch.device("cuda")  # Device to use during training.
 
 # Uncomment for logging
-"""
+
 wandb.init(
     project="tests",
-    entity="ENTITY",
+    entity=entity,
     config={
         "experiment": "ppo",
         "num_envs": num_envs,
@@ -58,7 +58,6 @@ wandb.init(
         "p_lr": p_lr,
     },
 )
-"""
 
 
 # The value network takes in an observation and returns a single value, the
@@ -67,9 +66,9 @@ class ValueNet(nn.Module):
     def __init__(self, obs_shape: torch.Size):
         nn.Module.__init__(self)
         flat_obs_dim = reduce(lambda e1, e2: e1 * e2, obs_shape, 1)
-        self.v_layer1 = nn.Linear(flat_obs_dim, 256)
-        self.v_layer2 = nn.Linear(256, 256)
-        self.v_layer3 = nn.Linear(256, 1)
+        self.v_layer1 = nn.Linear(flat_obs_dim, 64)
+        self.v_layer2 = nn.Linear(64, 64)
+        self.v_layer3 = nn.Linear(64, 1)
         self.relu = nn.ReLU()
         init_orthogonal(self)
 
@@ -88,9 +87,9 @@ class PolicyNet(nn.Module):
     def __init__(self, obs_shape: torch.Size, action_count: int):
         nn.Module.__init__(self)
         flat_obs_dim = reduce(lambda e1, e2: e1 * e2, obs_shape, 1)
-        self.a_layer1 = nn.Linear(flat_obs_dim, 256)
-        self.a_layer2 = nn.Linear(256, 256)
-        self.a_layer3 = nn.Linear(256, action_count)
+        self.a_layer1 = nn.Linear(flat_obs_dim, 64)
+        self.a_layer2 = nn.Linear(64, 64)
+        self.a_layer3 = nn.Linear(64, action_count)
         self.relu = nn.ReLU()
         self.logits = nn.LogSoftmax(1)
         init_orthogonal(self)
@@ -190,8 +189,6 @@ for _ in tqdm(range(iterations), position=0):
             avg_entropy /= steps_taken
             entropy_total += avg_entropy
 
-    # Uncomment for logging
-    """
     wandb.log(
         {
             "avg_eval_episode_reward": reward_total / eval_steps,
@@ -200,4 +197,3 @@ for _ in tqdm(range(iterations), position=0):
             "avg_p_loss": total_p_loss / train_iters,
         }
     )
-    """
