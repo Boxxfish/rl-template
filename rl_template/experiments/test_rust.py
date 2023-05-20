@@ -4,14 +4,13 @@ This should be removed if the Rust environment changes.
 """
 from functools import reduce
 from typing import Any, Dict, Tuple
-import gymnasium
 
-from rl_template_rust import CartpoleEnv  # type: ignore
+import gymnasium
 import torch
 import torch.nn as nn
 import wandb
+from gymnasium.spaces import Box, Discrete
 from gymnasium.vector import SyncVectorEnv
-from gymnasium.spaces import Discrete, Box
 from torch.distributions import Categorical
 from tqdm import tqdm
 
@@ -19,6 +18,7 @@ from rl_template.algorithms.ppo import train_ppo
 from rl_template.algorithms.rollout_buffer import RolloutBuffer
 from rl_template.conf import entity
 from rl_template.utils import init_orthogonal
+from rl_template_rust import CartpoleEnv  # type: ignore
 
 _: Any
 
@@ -99,6 +99,7 @@ class PolicyNet(nn.Module):
         x = self.logits(x)
         return x
 
+
 # Wraps the Rust env in a Python class.
 class PyCartpoleEnv(gymnasium.Env):
     def __init__(self):
@@ -106,16 +107,13 @@ class PyCartpoleEnv(gymnasium.Env):
         self.action_space = Discrete(2)
         self.env = CartpoleEnv()
 
-    def step(
-        self, action: int
-    ):
+    def step(self, action: int):
         obs, reward, terminated = self.env.step(action)
         return (obs, reward, terminated, False, {})
-    
+
     def reset(self):
         obs = self.env.reset()
         return (obs, {})
-
 
 
 env = SyncVectorEnv([lambda: PyCartpoleEnv() for _ in range(num_envs)])
