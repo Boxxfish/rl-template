@@ -13,6 +13,7 @@ Next, install the project. You'll need Poetry and >=Python3.9.
 ```bash
 poetry install
 poetry shell
+cd RUST_FOLDER_NAME && maturin build --release  # Builds the Rust wheel for Python.
 ```
 
 To see if everything works, run the PPO test. If you want logging, you'll need
