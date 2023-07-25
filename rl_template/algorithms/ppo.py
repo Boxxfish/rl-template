@@ -72,8 +72,8 @@ def train_ppo(
             new_act_probs = Categorical(logits=new_log_probs).log_prob(
                 actions.squeeze()
             )
-            term1 = (new_act_probs - old_act_probs).exp() * advantages
-            term2 = (1.0 + epsilon * advantages.sign()) * advantages
+            term1 = (new_act_probs - old_act_probs).exp() * advantages.squeeze()
+            term2 = (1.0 + epsilon * advantages.squeeze().sign()) * advantages.squeeze()
             p_loss = -term1.min(term2).mean() / gradient_steps
             p_loss.backward()
             total_p_loss += p_loss.item()
@@ -84,11 +84,11 @@ def train_ppo(
             v_loss.backward()
             total_v_loss += v_loss.item()
 
-        if (i + 1) % gradient_steps == 0:
-            p_opt.step()
-            v_opt.step()
-            p_opt.zero_grad()
-            v_opt.zero_grad()
+            if (i + 1) % gradient_steps == 0:
+                p_opt.step()
+                v_opt.step()
+                p_opt.zero_grad()
+                v_opt.zero_grad()
 
     if device.type != "cpu":
         p_net.cpu()
