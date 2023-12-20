@@ -53,3 +53,12 @@ def init_xavier(src: nn.Module):
         for param in src.parameters():
             if len(param.size()) >= 2:
                 param.copy_(torch.nn.init.xavier_normal_(param.data))
+
+
+def polyak_avg(src: nn.Module, dest: nn.Module, p: float):
+    """
+    Smoothly copies params from one model to another.
+    At `p` = 1, `src` overwrites `dest`, at `p` = 0, nothing happens.
+    """
+    for dest_, src_ in zip(dest.parameters(), src.parameters()):
+        dest_.data.copy_(p * src_.data + (1.0 - p) * dest_.data)
