@@ -179,11 +179,11 @@ for _ in tqdm(range(iterations), position=0):
                 obs_, reward, eval_done, _, _ = test_env.step(action)
                 eval_obs = torch.Tensor(obs_)
                 steps_taken += 1
+                reward_total += reward
+                avg_entropy += distr.entropy()
                 if eval_done:
                     eval_obs = torch.Tensor(test_env.reset()[0])
                     break
-                reward_total += reward
-                avg_entropy += distr.entropy()
             avg_entropy /= steps_taken
             entropy_total += avg_entropy
 
