@@ -124,7 +124,6 @@ buffer = RolloutBuffer(
 )
 
 obs = torch.Tensor(env.reset()[0])
-done = False
 for _ in tqdm(range(iterations), position=0):
     # Collect experience for a number of steps and store it in the buffer
     with torch.no_grad():
@@ -141,9 +140,6 @@ for _ in tqdm(range(iterations), position=0):
                 truncs,
             )
             obs = torch.from_numpy(obs_)
-            if done:
-                obs = torch.Tensor(env.reset()[0])
-                done = False
         buffer.insert_final_step(obs)
 
     # Train
