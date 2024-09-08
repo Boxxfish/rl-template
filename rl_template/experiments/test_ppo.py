@@ -19,7 +19,6 @@ from tqdm import tqdm
 
 from rl_template.algorithms.ppo import train_ppo
 from rl_template.algorithms.rollout_buffer import RolloutBuffer
-from rl_template.conf import entity
 from rl_template.utils import init_orthogonal
 
 _: Any
@@ -41,7 +40,6 @@ device = torch.device("cuda")  # Device to use during training.
 
 wandb.init(
     project="tests",
-    entity=entity,
     config={
         "experiment": "ppo",
         "num_envs": num_envs,

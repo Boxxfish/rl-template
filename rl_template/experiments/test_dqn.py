@@ -18,7 +18,6 @@ import wandb
 from gymnasium.envs.classic_control.cartpole import CartPoleEnv
 from tqdm import tqdm
 
-import rl_template.conf
 from rl_template.algorithms.dqn import train_dqn
 from rl_template.algorithms.replay_buffer import ReplayBuffer
 from rl_template.utils import init_orthogonal
@@ -44,7 +43,6 @@ device = torch.device("cuda")
 
 wandb.init(
     project="tests",
-    entity=rl_template.conf.entity,
     config={
         "experiment": "dqn",
         "num_envs": num_envs,

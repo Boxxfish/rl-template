@@ -18,7 +18,6 @@ from gymnasium.envs.classic_control.cartpole import CartPoleEnv
 from tqdm import tqdm
 
 from rl_template.algorithms.c51 import distrs_to_means
-import rl_template.conf
 from rl_template.algorithms.c51 import train_c51
 from rl_template.algorithms.replay_buffer import ReplayBuffer
 from rl_template.utils import init_orthogonal
@@ -48,7 +47,6 @@ device = torch.device("cpu")
 
 wandb.init(
     project="tests",
-    entity=rl_template.conf.entity,
     config={
         "experiment": "c51",
         "num_envs": num_envs,
