@@ -1,18 +1,20 @@
-import importlib
-from typing import Tuple
-from pydantic import BaseModel
+from argparse import ArgumentParser
+import os
+from pathlib import Path
+from typing import Literal, Tuple, TypeVar, get_args, get_origin
+import wandb
 
 import torch
 from torch import nn
 
-T = TypeVar("T", bound=BaseModel)
+T = TypeVar("T")
 
 
 def parse_args(cfg_t: type[T]) -> T:
     parser = ArgumentParser()
     for k, v in cfg_t.model_fields.items():
         flag_name = f"--{k.replace('_', '-')}"
-        if v.annotation == bool:
+        if v.annotation is bool:
             parser.add_argument(flag_name, default=v.default, action="store_true")
         elif get_origin(v.annotation) == Literal:
             choices = list(get_args(v.annotation))
@@ -51,6 +53,7 @@ def create_directory(out_dir_: str, meta: T) -> Path:
     except OSError as e:
         print(e)
     return chkpt_path
+
 
 def get_img_size(old_h: int, old_w: int, conv: torch.nn.Conv2d) -> Tuple[int, int]:
     """
