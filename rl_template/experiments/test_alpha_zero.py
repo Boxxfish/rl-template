@@ -3,7 +3,14 @@ Experiment for checking that AlphaZero works.
 
 AlphaZero is a search-based RL algorithm that uses Monte Carlo Tree Search (MCTS) rollouts during both training and
 inference to refine action values.
+
+Note that this isn't a TRUE version of AlphaZero -- AlphaZero was designed for 2 player, sparse reward environments,
+while our version uses details from MuZero to extend this to the single player domain.
+
+This also doesn't do the automatic minimum-maximum Q value rescaling done in MuZero, so make sure your `puct_c1` and
+`puct_c2` constants are set accordingly, and/or you've normalized your reward function.
 """
+
 import copy
 import random
 from functools import reduce
@@ -25,6 +32,7 @@ from rl_template.utils import init_orthogonal, parse_args
 _: Any
 INF = 10**8
 
+
 class Args(BaseModel):
     train_steps: int = 512  # Number of steps to step through during sampling.
     iterations: int = 1_000  # Number of sample/train iterations.
@@ -34,11 +42,16 @@ class Args(BaseModel):
     eval_iters: int = 8  # Number of eval runs to average over.
     max_eval_steps: int = 300  # Max number of steps to take during each eval run.
     lr: float = 0.0001  # Learning rate.
-    puct_train: float = 1.0 # PUCT constant during training. When 0, traversal becomes greedy.
-    puct_eval: float = 1.0 # PUCT constant during eval. When 0, traversal becomes greedy.
-    num_rollouts_train: int = 10 # Number of rollouts per training step.
-    num_rollouts_eval: int = 50 # Number of rollouts per eval step.
+    puct_c1: float = (
+        1.25  # PUCT constant. Higher values increase exploration.
+    )
+    puct_c2: float = (
+        19652.0  # PUCT constant. Higher values increase exploration.
+    )
+    num_rollouts_train: int = 10  # Number of rollouts per training step.
+    num_rollouts_eval: int = 50  # Number of rollouts per eval step.
     device: str = "cuda"
+
 
 class PolicyValueNet(nn.Module):
     def __init__(
@@ -68,6 +81,7 @@ class PolicyValueNet(nn.Module):
         value = self.value(x)
         return value + advantage - advantage.mean(1, keepdim=True)
 
+
 def main():
     args = parse_args(Args)
     device = torch.device(args.device)
@@ -79,23 +93,20 @@ def main():
         config=config_dict,
     )
 
-
-    env = envpool.make("CartPole-v1", "gym", num_envs=num_envs)
+    env = CartPoleEnv()
     test_env = CartPoleEnv()
 
-    # Initialize Q network
+    # Initialize network
     obs_space = env.observation_space
     act_space = env.action_space
-    q_net = QNet(obs_space.shape, int(act_space.n))
-    q_net_target = copy.deepcopy(q_net)
-    q_net_target.to(device)
-    q_opt = torch.optim.Adam(q_net.parameters(), lr=q_lr)
+    net = PolicyValueNet(obs_space.shape, int(act_space.n))
+    opt = torch.optim.Adam(q_net.parameters(), lr=q_lr)
 
     # A replay buffer stores experience collected over all sampling runs
     buffer = ReplayBuffer(
         torch.Size(obs_space.shape),
         torch.Size((int(act_space.n),)),
-        buffer_size,
+        args.,
     )
 
     obs = torch.Tensor(env.reset()[0])
@@ -176,6 +187,7 @@ def main():
                     "q_lr": q_opt.param_groups[-1]["lr"],
                 }
             )
+
 
 if __name__ == "__main__":
     main()
