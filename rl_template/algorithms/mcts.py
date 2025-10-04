@@ -1,18 +1,40 @@
 from abc import ABC, abstractmethod
+import copy
 import math
-from typing import Generic, TypeVar
+import random
+from typing import Any, Generic, TypeVar
+from typing_extensions import override
 from gymnasium import Env
 import numpy as np
+
+
+SaveState = TypeVar("SaveState")
+
+
+class BaseSavableEnv(ABC, Generic[SaveState]):
+    """Base class for envrionments that can save and load their state."""
+
+    @abstractmethod
+    def save_state(self) -> SaveState:
+        """Saves the state of the environment and returns it."""
+        pass
+
+    @abstractmethod
+    def load_state(self, save_state: SaveState) -> None:
+        """Loads the provided state into the environment."""
+        pass
+
 
 State = TypeVar("State")
 
 
-class BasePolicyValuePredictor(ABC):
+class BasePolicyValuePredictor(ABC, Generic[State]):
     """Base class for generating policy and state value outputs."""
 
     @abstractmethod
     def predict(self, state: State) -> tuple[list[float], float]:
         """Given the state, returns a probability distribution over actions and the state's predicted value."""
+        pass
 
 
 class MCTSNode(Generic[State]):
@@ -47,6 +69,7 @@ class MCTSNode(Generic[State]):
                 MCTSNode(p, self.c1, self.c2, self.discount) for p in prior_probs
             ]
             self.visit_count = 1
+            return self.mean_action_value
         else:
             # Select the best node and expand it
             child_priors = np.array([child.prior_prob for child in self.children])
@@ -56,7 +79,7 @@ class MCTSNode(Generic[State]):
                 1 + child_visits
             )
             child_values = np.array(
-                [child.get_mean_action_value() for child in self.children]
+                [child.mean_action_value for child in self.children]
             )
             a = int(np.argmax(child_values + u))
             (
@@ -71,7 +94,7 @@ class MCTSNode(Generic[State]):
                 self.children[a].mean_action_value = (
                     self.children[a].visit_count * self.children[a].mean_action_value
                     + reward
-                ) / self.children[a].visit_count
+                ) / (self.children[a].visit_count + 1)
                 self.children[a].visit_count += 1
                 g = self.children[a].mean_action_value
             else:
@@ -83,6 +106,7 @@ class MCTSNode(Generic[State]):
                 self.visit_count * self.mean_action_value + new_return
             ) / (self.visit_count + 1)
             self.visit_count += 1
+            return new_return
 
     def get_probs(self, temperature: float = 1.0) -> list[float]:
         """Returns action probabilities for this node."""
@@ -95,5 +119,71 @@ class MCTSNode(Generic[State]):
 
 if __name__ == "__main__":
     from gymnasium.envs.classic_control.cartpole import CartPoleEnv
+    from gymnasium.spaces import Discrete
+    from gymnasium import Env
 
-    env = CartPoleEnv()
+    class SaveableCartpole(Env, BaseSavableEnv[dict[str, Any]]):
+
+        def __init__(self, base_env: CartPoleEnv):
+            self.env = base_env
+            self.action_space = self.env.action_space
+            self.observation_space = self.env.observation_space
+
+        def step(self, action):
+            return self.env.step(action)
+
+        def reset(self, *args, seed=None, options=None):
+            return self.env.reset(*args, seed=seed, options=options)
+
+        def save_state(self):
+            state = self.env.__dict__.copy()
+            state.pop("screen", None)
+            state.pop("surf", None)
+            state.pop("clock", None)
+            state.pop("_np_random", None)
+            state.pop("render_mode", None)
+            state.pop("screen_width", None)
+            state.pop("screen_height", None)
+            state.pop("isopen", None)
+            state = copy.deepcopy(state)
+            return state
+
+        def load_state(self, save_state):
+            for key, val in save_state.items():
+                setattr(self.env, key, val)
+
+        def render(self):
+            return self.env.render()
+
+    env = SaveableCartpole(CartPoleEnv(render_mode="human"))
+    action_space = env.action_space
+    assert isinstance(action_space, Discrete)
+    num_actions = int(action_space.n)
+    obs, _ = env.reset()
+
+    class DummyPredictor(BasePolicyValuePredictor[type(obs)]):
+
+        def __init__(self) -> None:
+            pass
+
+        @override
+        def predict(self, state) -> tuple[list[float], float]:
+            return [1.0 / num_actions for _ in range(num_actions)], 0.0
+
+    predictor = DummyPredictor()
+    search_env = SaveableCartpole(CartPoleEnv())
+    while True:
+        # Run MCTS
+        save_state = env.save_state()
+        root = MCTSNode(1.0, 15.0, 19652.0, 0.9)
+        for _ in range(200):
+            search_env.load_state(save_state)
+            root.expand(obs, search_env, predictor)
+        action = random.choices(list(range(num_actions)), root.get_probs())[0]
+        print(action, root.mean_action_value, root.get_probs())
+
+        # Step through state
+        obs, reward, done, _, _ = env.step(action)
+        env.render()
+        if done:
+            obs, _ = env.reset()
