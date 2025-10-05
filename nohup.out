@@ -1,0 +1,8 @@
+wandb: Currently logged in as: bensgiacalone to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.22.1
+wandb: Run data is saved locally in /home/ben/git/rl-template/wandb/run-20251005_135447-j5ym5b6k
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run chocolate-dragon-50
+wandb: ⭐️ View project at https://wandb.ai/bensgiacalone/tests
+wandb: 🚀 View run at https://wandb.ai/bensgiacalone/tests/runs/j5ym5b6k
+  0%|          | 0/1000 [00:00<?, ?it/s]  0%|          | 1/1000 [00:52<14:35:02, 52.56s/it]  0%|          | 2/1000 [01:06<8:19:58, 30.06s/it]   0%|          | 3/1000 [01:21<6:21:25, 22.95s/it]  0%|          | 4/1000 [01:36<5:27:32, 19.73s/it]  0%|          | 5/1000 [01:51<4:59:39, 18.07s/it]  1%|          | 6/1000 [02:07<4:46:14, 17.28s/it]  1%|          | 7/1000 [02:22<4:38:42, 16.84s/it]  1%|          | 8/1000 [02:38<4:34:08, 16.58s/it]  1%|          | 9/1000 [02:55<4:32:26, 16.49s/it]  1%|          | 10/1000 [03:11<4:30:04, 16.37s/it]  1%|          | 11/1000 [05:03<12:32:33, 45.66s/it]  1%|          | 12/1000 [05:19<10:05:52, 36.79s/it]  1%|▏         | 13/1000 [05:36<8:26:02, 30.76s/it]   1%|▏         | 14/1000 [05:53<7:16:36, 26.57s/it]  2%|▏         | 15/1000 [06:10<6:29:21, 23.72s/it]  2%|▏         | 16/1000 [06:28<5:57:10, 21.78s/it]  2%|▏         | 17/1000 [06:45<5:34:47, 20.44s/it]  2%|▏         | 18/1000 [07:02<5:19:23, 19.52s/it]  2%|▏         | 19/1000 [07:20<5:08:30, 18.87s/it]  2%|▏         | 20/1000 [07:37<5:01:40, 18.47s/it]

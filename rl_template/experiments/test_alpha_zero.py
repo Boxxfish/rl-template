@@ -34,12 +34,11 @@ from rl_template.utils import parse_args
 
 
 class Args(BaseModel):
-    train_steps: int = 512  # Number of steps to step through during sampling.
+    train_steps: int = 2048  # Number of steps to step through during sampling.
+    train_batch_size: int = 512 # Training batch size.
     iterations: int = 1_000  # Number of sample/train iterations.
-    train_iters: int = 1  # Number of passes over the samples collected.
-    train_batch_size: int = 512  # Minibatch size while training models.
-    discount: float = 1.0  # Discount factor applied to rewards.
-    lr: float = 0.0001  # Learning rate.
+    discount: float = 0.9  # Discount factor applied to rewards.
+    lr: float = 10e-4  # Learning rate.
     ucb_c1: float = 1.25  # UCB constant. Higher values increase exploration.
     ucb_c2: float = 19652.0  # UCB constant. Higher values increase exploration.
     num_searches_train: int = 100  # Number of searches per training step.
@@ -116,12 +115,13 @@ class PolicyValueNet(nn.Module, BasePolicyValuePredictor[np.ndarray]):
     def predict(self, state: np.ndarray):
         with torch.no_grad():
             policy_logits, value = self.forward(torch.from_numpy(state).unsqueeze(0))
-        return torch.softmax(policy_logits, 0).tolist(), float(value.item())
+        return torch.softmax(policy_logits.squeeze(0), 0).tolist(), float(value.squeeze(0).item())
 
 
 def main():
     args = parse_args(Args)
     device = torch.device(args.device)
+    assert args.train_steps % args.train_batch_size == 0
 
     config_dict = {"experiment": "alpha_zero"}
     config_dict.update(args.model_dump())
@@ -138,7 +138,7 @@ def main():
     obs_space = env.observation_space
     act_space = env.action_space
     policy_value_net = PolicyValueNet(obs_space.shape, int(act_space.n))
-    opt = torch.optim.Adam(policy_value_net.parameters(), lr=args.lr)
+    opt = torch.optim.AdamW(policy_value_net.parameters(), lr=args.lr)
 
     buffer = list[
         tuple[
@@ -148,8 +148,8 @@ def main():
         ]
     ]()
 
-    obs = torch.Tensor(env.reset()[0])
-    for _ in tqdm(range(args.iterations), position=0):
+    obs = env.reset()[0]
+    for step in tqdm(range(args.iterations), position=0):
         # Collect experience
         buffer.clear()
         with torch.no_grad():
@@ -165,69 +165,67 @@ def main():
                         policy_value_net,
                     )
                 action_probs = root.get_probs(args.train_temperature)
-                action = random.choices(action_probs)
+                action = random.choices(list(range(len(action_probs))), action_probs)[0]
 
                 # Save step data
                 mean_action_value = root.mean_action_value
-                buffer.append((obs, action_probs, mean_action_value))
+                buffer.append((torch.from_numpy(obs), torch.tensor(action_probs), mean_action_value))
 
                 # Step through env
-                obs_, reward, done, trunc, _ = env.step(action)
+                obs, reward, done, trunc, _ = env.step(action)
                 if done or trunc:
-                    obs_ = env.reset()[0]
-                next_obs = torch.from_numpy(obs_)
-                obs = next_obs
+                    obs = env.reset()[0]
 
         # Train
         ce_loss, mse_loss = train_alpha_zero(
             policy_value_net,
             opt,
             buffer,
+            args.train_batch_size,
             device,
         )
 
-        # Evaluate the network's performance after this training iteration.
-        eval_done = False
-        with torch.no_grad():
-            reward_total = 0
-            pred_reward_total = 0
-            obs_ = test_env.reset()[0]
-            eval_obs = torch.from_numpy(np.array(obs_)).float()
-            for _ in range(args.eval_iters):
-                for _ in range(args.max_eval_steps):
-                    # Perform MCTS
-                    root = MCTSNode(1.0, args.ucb_c1, args.ucb_c2, args.discount)
-                    save_state = test_env.save_state()
-                    for _ in range(args.num_searches_eval):
-                        search_env.load_state(save_state)
-                        root.expand(
-                            eval_obs,
-                            search_env,
-                            policy_value_net,
-                        )
-                    action_probs = root.get_probs(args.eval_temperature)
-                    action = random.choices(action_probs)
+        log_dict = {
+            "prob_ce_loss": ce_loss,
+            "val_mse_loss": mse_loss,
+            "lr": opt.param_groups[-1]["lr"],
+        }
 
-                    # Step through environment
-                    pred_reward_total += mean_action_value
-                    obs_, reward, eval_done, eval_trunc, _ = test_env.step(action)
-                    eval_obs = torch.from_numpy(np.array(obs_)).float()
-                    reward_total += reward
-                    if eval_done or eval_trunc:
-                        obs_ = test_env.reset()[0]
-                        eval_obs = torch.from_numpy(np.array(obs_)).float()
-                        break
+        # Evaluate the network's performance
+        if step % args.eval_every == 0:
+            with torch.no_grad():
+                reward_total = 0.0
+                pred_reward_total = 0.0
+                eval_obs = test_env.reset()[0]
+                for _ in range(args.eval_iters):
+                    for _ in range(args.max_eval_steps):
+                        # Perform MCTS
+                        root = MCTSNode(1.0, args.ucb_c1, args.ucb_c2, args.discount)
+                        save_state = test_env.save_state()
+                        for _ in range(args.num_searches_eval):
+                            search_env.load_state(save_state)
+                            root.expand(
+                                eval_obs,
+                                search_env,
+                                policy_value_net,
+                            )
+                        action_probs = root.get_probs(args.eval_temperature)
+                        action = random.choices(list(range(len(action_probs))), action_probs)[0]
 
-        wandb.log(
-            {
+                        # Step through environment
+                        pred_reward_total += root.mean_action_value
+                        eval_obs, reward, done, trunc, _ = test_env.step(action)
+                        reward_total += reward
+                        if done or trunc:
+                            eval_obs = test_env.reset()[0]
+                            break
+            
+            log_dict.update({
                 "avg_eval_episode_reward": reward_total / args.eval_iters,
-                "avg_eval_episode_predicted_reward": pred_reward_total
-                / args.eval_iters,
-                "prob_ce_loss": ce_loss,
-                "val_mse_loss": mse_loss,
-                "lr": opt.param_groups[-1]["lr"],
-            }
-        )
+                "avg_eval_episode_predicted_reward": pred_reward_total / args.eval_iters,
+            })
+
+        wandb.log(log_dict)
 
 
 if __name__ == "__main__":
