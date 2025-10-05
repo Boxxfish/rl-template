@@ -93,7 +93,7 @@ class MCTSNode(Generic[State]):
             if done:
                 self.children[a].mean_action_value = (
                     self.children[a].visit_count * self.children[a].mean_action_value
-                    + reward
+                    + float(reward)
                 ) / (self.children[a].visit_count + 1)
                 self.children[a].visit_count += 1
                 g = self.children[a].mean_action_value
@@ -101,7 +101,7 @@ class MCTSNode(Generic[State]):
                 g = self.children[a].expand(state, env, predictor)
 
             # Backup values
-            new_return = reward + self.discount * g
+            new_return = float(reward) + self.discount * g
             self.mean_action_value = (
                 self.visit_count * self.mean_action_value + new_return
             ) / (self.visit_count + 1)
@@ -161,7 +161,7 @@ if __name__ == "__main__":
     num_actions = int(action_space.n)
     obs, _ = env.reset()
 
-    class DummyPredictor(BasePolicyValuePredictor[type(obs)]):
+    class DummyPredictor(BasePolicyValuePredictor[np.ndarray]):
 
         def __init__(self) -> None:
             pass
@@ -175,7 +175,7 @@ if __name__ == "__main__":
     while True:
         # Run MCTS
         save_state = env.save_state()
-        root = MCTSNode(1.0, 15.0, 19652.0, 0.9)
+        root = MCTSNode[np.ndarray](1.0, 15.0, 19652.0, 0.9)
         for _ in range(200):
             search_env.load_state(save_state)
             root.expand(obs, search_env, predictor)
