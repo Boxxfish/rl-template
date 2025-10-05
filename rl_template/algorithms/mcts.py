@@ -41,7 +41,12 @@ class MCTSNode(Generic[State]):
     """A node in the MCTS search tree."""
 
     def __init__(
-        self, prior_prob: float, c1: float, c2: float, discount: float
+        self,
+        prior_prob: float,
+        c1: float,
+        c2: float,
+        discount: float,
+        eps: float = 10e-3,
     ) -> None:
         self.c1 = c1
         self.c2 = c2
@@ -50,6 +55,7 @@ class MCTSNode(Generic[State]):
         self.visit_count = 0
         self.mean_action_value = 0.0
         self.children = list[MCTSNode]()
+        self.eps = eps
 
     def expand(
         self, state: State, env: Env, predictor: BasePolicyValuePredictor[State]
@@ -113,8 +119,13 @@ class MCTSNode(Generic[State]):
         denom = sum([child.visit_count ** (1 / temperature) for child in self.children])
         assert denom > 0, "At least one child must be visited first"
         return [
-            (child.visit_count ** (1 / temperature)) / denom for child in self.children
+            ((child.visit_count ** (1 / temperature)) + self.eps) / denom
+            for child in self.children
         ]
+
+    def get_child_priors(self) -> list[float]:
+        """Returns child prior probabilities for this node."""
+        return [child.prior_prob for child in self.children]
 
 
 if __name__ == "__main__":
