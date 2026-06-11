@@ -127,6 +127,7 @@ class RolloutBuffer:
 
             # Calculate advantage estimates and rewards to go
             state_values = step_returns.clone()
+            # TODO: Step advantages must take trunctation into account, fix this next time I use this
             step_advantages = torch.zeros([self.num_envs], dtype=torch.float, device=d)
             for i in reversed(range(self.num_steps)):
                 prev_states = self.states[i]
